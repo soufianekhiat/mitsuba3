@@ -1,4 +1,4 @@
-set(INC_DIR "../../include/mitsuba/render")
+﻿set(INC_DIR "../../include/mitsuba/render")
 
 set(LIBRENDER_EXTRA_SRC "")
 
@@ -16,7 +16,7 @@ if (MI_ENABLE_CUDA)
     -DOUTPUT_C=librender_ptx.cpp
     -DOUTPUT_H=librender_ptx.h
     "-DINPUT_FILES=${resources_string}"
-    -P "${PROJECT_SOURCE_DIR}/ext/nanogui/resources/bin2c.cmake")
+    -P "${PROJECT_SOURCE_DIR}/resources/bin2c.cmake")
 
   # Run bin2c on resource files
   add_custom_command(

@@ -1,4 +1,4 @@
-# ----------------------------------------------------------
+﻿# ----------------------------------------------------------
 #   Mitsuba python library
 # ----------------------------------------------------------
 
@@ -305,7 +305,6 @@ endif()
 
 if (UNIX)
   include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../ext/nanogui/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../ext/struct-jit/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../ext/drjit/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../ext/drjit/ext/drjit-core/include
