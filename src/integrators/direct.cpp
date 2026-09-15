@@ -198,9 +198,39 @@ public:
                value still adds nothing to the image. */
             Mask active_b = active && (bs.pdf > 0.f);
 
+            /* FIXED AGAINST THE GEOMETRY, not against the material. When
+               this integrator is differentiated through a receiver that
+               moves, a sampled direction mapped through the ATTACHED shading
+               frame turns with it and drags the discontinuous visibility
+               along: the neighbour's shadow travels with the samples, the
+               tape reads nothing of it, and the boundary term that completes
+               the derivative is written for directions fixed in the world.
+               So the local sample is mapped into the world through the
+               DETACHED frame -- a moving receiver no longer carries its
+               samples -- while it keeps its dependence on the material's own
+               parameters: a roughness still turns the lobe, the
+               reparameterised derivative every material gate measures (a
+               whole-sample detach lost it). The value is re-evaluated at that
+               world direction under the attached frame, over the sample's own
+               pdf, and the MIS weight takes the re-evaluation's pdf, so both
+               are differentiated in one parameterisation. Equal in value;
+               only a frame that carries a gradient takes this path, and a
+               delta lobe, which eval cannot see, keeps its sampled weight. */
+            Ray3f bsdf_ray = si.spawn_ray(si.to_world(bs.wo));
+            Float bsdf_pdf = bs.pdf;
+            if (dr::grad_enabled(si.sh_frame)) {
+                Vector3f const wo_world = dr::detach(si.sh_frame).to_world(bs.wo);
+                bsdf_ray				= si.spawn_ray(wo_world);
+
+                Mask const smooth = active_b && !has_flag(bs.sampled_type, BSDFFlags::Delta);
+                Vector3f const wo_2 = si.to_local(wo_world);
+                auto [f_2, pdf_2]	= bsdf->eval_pdf(ctx, si, wo_2, smooth);
+                bsdf_val[smooth] = f_2 / bs.pdf;
+                dr::masked(bsdf_pdf, smooth) = pdf_2;
+            }
+
             // Trace the ray in the sampled direction and intersect against the scene
-            SurfaceInteraction3f si_bsdf =
-                scene->ray_intersect(si.spawn_ray(si.to_world(bs.wo)), active_b);
+            SurfaceInteraction3f si_bsdf = scene->ray_intersect(bsdf_ray, active_b);
 
             // Retain only rays that hit an emitter
             EmitterPtr emitter = si_bsdf.emitter(scene, active_b);
@@ -219,7 +249,7 @@ public:
 
                 result[active_b] +=
                     bsdf_val * emitter_val *
-                    mis_weight(bs.pdf * m_frac_bsdf, emitter_pdf * m_frac_lum) *
+                    mis_weight(bsdf_pdf * m_frac_bsdf, emitter_pdf * m_frac_lum) *
                     m_weight_bsdf;
             }
         }
