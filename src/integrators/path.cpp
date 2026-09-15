@@ -327,8 +327,16 @@ public:
                no-op in non-differentiable variants. */
             ls.throughput[rr_active] *= dr::rcp(dr::detach(rr_prob));
 
+            /* End on an INVALID sample, not on a zero throughput. A black
+               surface zeroes the throughput's value but not its derivative
+               with respect to the reflectance; ending there threw away the
+               BSDF strategy's MIS share of it (the emission this path would
+               have found next). A zero throughput still adds nothing to the
+               image. Russian roulette is untouched: its probability follows
+               the throughput's value, so once it applies (depth >= rr_depth)
+               a black vertex still ends the path (a stated limit). */
             ls.active = active_next && (!rr_active || rr_continue) &&
-                        (throughput_max != 0.f);
+                        (bsdf_sample.pdf > 0.f);
 
             // Reorder threads based on the shape they hit
             ls.pi = scene->ray_intersect_preliminary(ls.ray,

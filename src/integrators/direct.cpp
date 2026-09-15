@@ -190,7 +190,13 @@ public:
                                                sampler->next_2d(active), active);
             bsdf_val = si.to_world_mueller(bsdf_val, -bs.wo, si.wi);
 
-            Mask active_b = active && dr::any(unpolarized_spectrum(bsdf_val) != 0.f);
+            /* Keep every VALID sample, not every non-zero one. At a black
+               reflectance the sample's value is zero while its derivative
+               with respect to the reflectance is not; masking on the value
+               threw away this strategy's MIS share of that derivative (the
+               colour adjoint read ~0.18 of the truth at rho = 0). A zero
+               value still adds nothing to the image. */
+            Mask active_b = active && (bs.pdf > 0.f);
 
             // Trace the ray in the sampled direction and intersect against the scene
             SurfaceInteraction3f si_bsdf =
