@@ -319,6 +319,37 @@ public:
             Float throughput_max = dr::max(unpolarized_spectrum(ls.throughput));
 
             Float rr_prob = dr::minimum(throughput_max * dr::square(ls.eta), .95f);
+
+            /* A FLOOR, IN DIFFERENTIABLE VARIANTS ONLY. Roulette's survival
+               probability follows the throughput's VALUE, and a black surface
+               zeroes that value without zeroing its derivative -- so at a
+               reflectance of exactly zero rr_prob is zero, no lane survives,
+               and the emission this path would have found next is lost along
+               with its gradient. That is the same class of mistake as the two
+               value-derived masks fixed above, one line further down, and it
+               was measured at 0.175 of the truth on every channel
+               (MitsubaBackendProviderTest.RussianRouletteKeepsABlackVertexs-
+               Derivative, a convex sphere under a uniform sky where the
+               radiance is exactly linear in the reflectance).
+
+               IT COSTS THE PICTURE NOTHING. Roulette is unbiased for ANY
+               survival probability in (0, 1], so raising it changes variance
+               and never the mean; and for the paths this rescues the
+               throughput's value is zero, so they contribute exactly zero to
+               the image whether they live or die. What they carry is a
+               derivative.
+
+               It also removes a latent NaN: the line below multiplies by
+               rcp(detach(rr_prob)) on every roulette-active lane whether or
+               not it survives, and rcp(0) times a zero throughput is a NaN in
+               a path that is merely about to die -- harmless only for as long
+               as nothing reads it.
+
+               The constant is a variance/cost knob, not a physical quantity:
+               larger keeps more dim paths alive and costs more. */
+            if constexpr (dr::is_diff_v<Float>)
+                rr_prob = dr::maximum(rr_prob, Float(0.05f));
+
             Mask rr_active = ls.depth >= m_rr_depth,
                  rr_continue = ls.sampler->next_1d() < rr_prob;
 
@@ -332,9 +363,8 @@ public:
                with respect to the reflectance; ending there threw away the
                BSDF strategy's MIS share of it (the emission this path would
                have found next). A zero throughput still adds nothing to the
-               image. Russian roulette is untouched: its probability follows
-               the throughput's value, so once it applies (depth >= rr_depth)
-               a black vertex still ends the path (a stated limit). */
+               image. Russian roulette WAS the stated limit here and is now
+               handled too -- see the floor on rr_prob above. */
             ls.active = active_next && (!rr_active || rr_continue) &&
                         (bsdf_sample.pdf > 0.f);
 
