@@ -65,7 +65,7 @@ public:
     DirectionalEmitter(const Properties &props) : Base(props) {
         /* Until `set_scene` is called, we have no information
            about the scene and default to the unit bounding sphere. */
-        m_bsphere = ScalarBoundingSphere3f(ScalarPoint3f(0.f), 1.f);
+        m_bsphere = BoundingSphere3f(ScalarPoint3f(0.f), 1.f);
 
         if (props.has_property("direction")) {
             if (props.has_property("to_world"))
@@ -97,7 +97,8 @@ public:
 
     void set_scene(const Scene *scene) override {
         if (scene->bbox().valid()) {
-            m_bsphere = scene->bbox().bounding_sphere();
+            ScalarBoundingSphere3f scene_sphere = scene->bbox().bounding_sphere();
+            m_bsphere = BoundingSphere3f(scene_sphere.center, scene_sphere.radius);
             m_bsphere.radius =
                 dr::maximum(math::RayEpsilon<Float>,
                         m_bsphere.radius * (1.f + math::RayEpsilon<Float>) );
@@ -105,6 +106,9 @@ public:
             m_bsphere.center = 0.f;
             m_bsphere.radius = math::RayEpsilon<Float>;
         }
+        // Opaque, as the constant emitter keeps its sphere: a literal sphere is
+        // kernel text, so a scene whose box moves compiles a new render kernel.
+        dr::make_opaque(m_bsphere.center, m_bsphere.radius);
     }
 
     Spectrum eval(const SurfaceInteraction3f & /*si*/,
@@ -230,9 +234,9 @@ public:
 
 protected:
     ref<Texture> m_irradiance;
-    ScalarBoundingSphere3f m_bsphere;
+    BoundingSphere3f m_bsphere;
 
-    MI_TRAVERSE_CB(Base, m_irradiance)
+    MI_TRAVERSE_CB(Base, m_irradiance, m_bsphere)
 };
 
 MI_EXPORT_PLUGIN(DirectionalEmitter)
